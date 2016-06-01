@@ -1,0 +1,17 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    cause (0.1)
+    influxdb (0.2.2)
+      cause
+      json
+    json (1.8.3)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  influxdb (= 0.2.2)
+
+BUNDLED WITH
+   1.11.2

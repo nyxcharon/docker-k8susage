@@ -1,5 +1,6 @@
 require 'influxdb'
 require 'json'
+require 'date'
 
 puts "Starting run at #{Time.now}"
 database = 'k8s'
@@ -57,37 +58,43 @@ influxdb.query 'SELECT value,pod_namespace FROM "cpu/request" WHERE time > now()
                     end
                   end
 
-# Tally up resources used by each namespace
-namespace_totals = {}
-limits.each do |k,v|
-  if namespace_totals[v[1]].nil?
-    namespace_totals[v[1]] = v[0]
-  else
-    namespace_totals[v[1]] = v[0] + namespace_totals[v[1]]
-  end
-end
-
 # Get cluster cost information
 money_data = get_report(CLOUDHEALTH_REPORT.to_s) #The custom k8s report
-cluster_cost = money_data['data'].last.first[0].to_f # This is the total amount the cluster costed yesterday
+cluster_cost = money_data['data'][money_data['data'].size-2].first[0] #Total cost for 2 days ago
 
-# Find total number of cores
-namespace_totals.each do |k, v|
-  total_cores += v
-end
-
-#Write Out the metrics
+# Point to our metric db
 database = 'k8s_usage'
 influxdb = InfluxDB::Client.new database,
                                 username: INFLUXDB_USERNAME,
                                 password: INFLUXDB_PASSWORD,
                                 host: INFLUXDB_HOST,
                                 retry: 5
+
+# Look at the data for the last 20 minutes, exactly 2 days ago
+start_date = (DateTime.now - 2)
+end_date = start_date+ Rational(20, 1440)
+
+namespace_totals = {}
+total_cores = 0
+influxdb.query "select * from \"pod_cpu\" where time > '#{start_date.strftime('%Y-%m-%d %T')}'
+                  and time < '#{end_date.strftime('%Y-%m-%d %T')}' group by namespace" do |_, b, c|
+                    namespace = b['namespace']
+                    namespace_data = c
+                    total = 0
+                    pods = 0
+                    namespace_data.each do |d|
+                      total += d['max_cpu']
+                    end
+                    namespace_totals[namespace] = total
+                    total_cores += total
+                  end
+
 data = []
 namespace_totals.each do |k,v|
   data.push(
     {
       series: 'namespace_metrics',
+      timestamp: start_date.to_time.to_i,
       tags: { namespace: k },
       values: { cpu_percent: (v / total_cores.to_f) * 100, daily_cost: (v / total_cores.to_f) * cluster_cost }
     })

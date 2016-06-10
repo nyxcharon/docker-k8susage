@@ -102,4 +102,5 @@ end
 
 influxdb.write_points(data)
 influxdb.write_points(pod_data)
+puts data
 puts "Finished run at #{Time.now}"

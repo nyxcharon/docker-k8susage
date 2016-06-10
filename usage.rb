@@ -76,6 +76,7 @@ end_date = start_date+ Rational(20, 1440)
 
 namespace_totals = {}
 total_cores = 0
+total_cost = 0
 influxdb.query "select * from \"pod_cpu\" where time > '#{start_date.strftime('%Y-%m-%d %T')}'
                   and time < '#{end_date.strftime('%Y-%m-%d %T')}' group by namespace" do |_, b, c|
                     namespace = b['namespace']
@@ -91,6 +92,7 @@ influxdb.query "select * from \"pod_cpu\" where time > '#{start_date.strftime('%
 
 data = []
 namespace_totals.each do |k,v|
+  total_cost += (v / total_cores.to_f) * cluster_cost
   data.push(
     {
       series: 'namespace_metrics',
@@ -103,4 +105,5 @@ end
 influxdb.write_points(data)
 influxdb.write_points(pod_data)
 puts data
+puts total_cost
 puts "Finished run at #{Time.now}"
